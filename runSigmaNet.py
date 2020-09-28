@@ -199,24 +199,55 @@ class InstanceNormalization(tf.keras.layers.Layer):
     normalized = (x - mean) * inv
     return self.scale * normalized + self.offset
     
-def res_block(x_in, filters):
+def res_block_EDSR(x_in, filters, norm_type='instancenorm', apply_norm=True):
     x = tf.keras.layers.Conv2D(filters, 3, padding='same')(x_in)
     x = tf.keras.layers.Activation('relu')(x)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x = tf.keras.layers.BatchNormalization()(x)
+        elif norm_type.lower() == 'instancenorm':
+            x = InstanceNormalization()(x)
     x = tf.keras.layers.Conv2D(filters, 3, padding='same')(x)
     x = tf.keras.layers.Add()([x_in, x])
     return x
     
-def upsampleEDSR(x, scale, num_filters):
+def upsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=True):
     def upsample_edsr(x, factor, **kwargs):
         x = tf.keras.layers.Conv2D(num_filters * (factor ** 2), 3, padding='same', **kwargs)(x)
+        x = tf.keras.layers.Activation('relu')(x)
+        if apply_norm:
+            if norm_type.lower() == 'batchnorm':
+                x = tf.keras.layers.BatchNormalization()(x)
+            elif norm_type.lower() == 'instancenorm':
+                x = InstanceNormalization()(x)
         return SubpixelConv2D(factor)(x)
     if scale == 2:
-        x = upsample_edsr(x, 2, name='conv2d_1_scale_2')
+        x = upsample_edsr(x, 2, name='conv2d_1_scale_2_up')
     elif scale == 3:
-        x = upsample_edsr(x, 3, name='conv2d_1_scale_3')
+        x = upsample_edsr(x, 3, name='conv2d_1_scale_3_up')
     elif scale == 4:
-        x = upsample_edsr(x, 2, name='conv2d_1_scale_2')
-        x = upsample_edsr(x, 2, name='conv2d_2_scale_2')
+        x = upsample_edsr(x, 2, name='conv2d_1_scale_2_up')
+        x = upsample_edsr(x, 2, name='conv2d_2_scale_2_up')
+    return x
+    
+def downsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=True):
+    def downsample_edsr(x, factor, **kwargs):
+        x = SubpixelConv2DDown(factor)(x)
+        x = tf.keras.layers.Conv2D(num_filters, 3, padding='same', **kwargs)(x)
+        x = tf.keras.layers.Activation('relu')(x)
+        if apply_norm:
+            if norm_type.lower() == 'batchnorm':
+                x = tf.keras.layers.BatchNormalization()(x)
+            elif norm_type.lower() == 'instancenorm':
+                x = InstanceNormalization()(x)
+        return x
+    if scale == 2:
+        x = downsample_edsr(x, 2, name='conv2d_1_scale_2_down')
+    elif scale == 3:
+        x = downsample_edsr(x, 3, name='conv2d_1_scale_3_down')
+    elif scale == 4:
+        x = downsample_edsr(x, 2, name='conv2d_1_scale_2_down')
+        x = downsample_edsr(x, 2, name='conv2d_2_scale_2_down')
     return x
     
 def downsample(filters, size, norm_type='instancenorm', apply_norm=True):
@@ -236,28 +267,23 @@ def downsample(filters, size, norm_type='instancenorm', apply_norm=True):
   result.add(
       tf.keras.layers.Conv2D(filters, size, strides=2, padding='same',
                              kernel_initializer=initializer, use_bias=False))
-
+  result.add(tf.keras.layers.LeakyReLU())
   if apply_norm:
     if norm_type.lower() == 'batchnorm':
       result.add(tf.keras.layers.BatchNormalization())
     elif norm_type.lower() == 'instancenorm':
       result.add(InstanceNormalization())
-
-  result.add(tf.keras.layers.LeakyReLU())
-
   return result
   
 def cyclegan_generator(args):
     x_in = tf.keras.layers.Input(shape=(None, None, 1))
     x = x_in
-    x = tf.keras.layers.Conv2D(args.ngf, 3, 2, padding='same')(x)
-    x = b = tf.keras.layers.Conv2D(args.ngf, 3, 2, padding='same')(x)
+    x = b = downsampleEDSR(x, 4, args.ngf, norm_type='instancenorm', apply_norm=True)
     for i in range(8):
-        b = res_block(b, args.ngf)
+        b = res_block_EDSR(b, args.ngf, norm_type='instancenorm', apply_norm=True)
     b = tf.keras.layers.Conv2D(args.ngf, 3, padding='same')(b)
     x = tf.keras.layers.Add()([x, b])
-
-    x = upsampleEDSR(x, 4, args.ngf)
+    x = upsampleEDSR(x, 4, args.ngf, norm_type='instancenorm', apply_norm=True)
     x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
 
     x = tf.keras.layers.Activation('tanh')(x)
@@ -353,17 +379,20 @@ def DiscriminatorSRGAN(args):
     
 def SubpixelConv2D(scale, **kwargs):
     return  tf.keras.layers.Lambda(lambda x: tf.nn.depth_to_space(x, scale), **kwargs)
+    
+def SubpixelConv2DDown(scale, **kwargs):
+    return  tf.keras.layers.Lambda(lambda x: tf.nn.space_to_depth(x, scale), **kwargs)
 
 def edsr(scale, num_filters=64, num_res_blocks=8):
     x_in = tf.keras.layers.Input(shape=(None, None, 1))
     x = x_in
     x = b = tf.keras.layers.Conv2D(num_filters, 3, padding='same')(x)
     for i in range(num_res_blocks):
-        b = res_block(b, num_filters)
+        b = res_block_EDSR(b, num_filters, norm_type='instancenorm', apply_norm=False)
     b = tf.keras.layers.Conv2D(num_filters, 3, padding='same')(b)
     x = tf.keras.layers.Add()([x, b])
 
-    x = upsampleEDSR(x, scale, num_filters)
+    x = upsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=False)
     x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
 
     x = tf.keras.layers.Activation('tanh')(x)
