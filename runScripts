@@ -1,0 +1,36 @@
+run distributedTFExample.py \
+--L1_lambda 1000.0 \
+--gpuIDs '0,1,2,3' \
+--dataset_dir 'srgan_BIN' \
+--batch_size 128 \
+--fine_size 64 \
+--srganFlag True \
+--p2pFlag False \
+--generator 'edsr' \
+--continue_train True \
+--restore_dir 'training_checkpoints/EDSR2' 
+
+
+run distributedTFExample.py \
+--L1_lambda 10.0 \
+--gpuIDs '0,1,2,3' \
+--dataset_dir 'traiDmaxTrainData_BIN' \
+--batch_size 4 \
+--fine_size 64 \
+--srganFlag True \
+--p2pFlag False \
+--generator 'resnetStyle3D' \
+--discriminator '3D'\
+--nDims 3 \
+
+
+run distributedTFExample.py --L1_lambda 10.0 --gpuIDs '' --dataset_dir 'traiDmaxTrainData_BIN' --batch_size 64 --fine_size 64 --generator 'resnetStyle3D' --discriminator '3D' --nDims 3 --input
+   ...: _nc 1 --output_nc 1 --save_freq 25 --print_freq 25 --restore_dir './training_checkpoints/20191011-165423-distNN-traiDmaxTrainData_BIN/ckpt' --srganFlag False --p2pFlag True --continue_train Tr
+   ...: ue --phase 'test' --test_dir './testFolder/dmaxSamples/' 
+ 
+ run distributedTFExample.py --L1_lambda 10.0 --gpuIDs '0,1,2,3' --dataset_dir 'traiDmaxTrainData_BIN' --batch_size 64 --fine_size 64 --generator 'resnetStyle3D' --discriminator '3D' --nDims 3 
+   ...: --input_nc 1 --output_nc 1 --save_freq 25 --print_freq 25 --restore_dir './training_checkpoints/20190920-140008-distNN-traiDmaxTrainData_BIN/ckpt-25' --srganFlag False --p2pFlag True --continu
+   ...: e_train True 
+ 
+ 
+
