@@ -199,7 +199,7 @@ class InstanceNormalization(tf.keras.layers.Layer):
     normalized = (x - mean) * inv
     return self.scale * normalized + self.offset
     
-def res_block_EDSR(x_in, filters, norm_type='instancenorm', apply_norm=True):
+def res_block_EDSR(x_in, filters, norm_type='instancenorm', apply_norm=False):
     x = tf.keras.layers.Conv2D(filters, 3, padding='same')(x_in)
     x = tf.keras.layers.Activation('relu')(x)
     if apply_norm:
@@ -211,7 +211,7 @@ def res_block_EDSR(x_in, filters, norm_type='instancenorm', apply_norm=True):
     x = tf.keras.layers.Add()([x_in, x])
     return x
     
-def upsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=True):
+def upsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=False):
     def upsample_edsr(x, factor, **kwargs):
         x = tf.keras.layers.Conv2D(num_filters * (factor ** 2), 3, padding='same', **kwargs)(x)
         x = tf.keras.layers.Activation('relu')(x)
@@ -230,7 +230,7 @@ def upsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=Tru
         x = upsample_edsr(x, 2, name='conv2d_2_scale_2_up')
     return x
     
-def downsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=True):
+def downsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=False):
     def downsample_edsr(x, factor, **kwargs):
         x = SubpixelConv2DDown(factor)(x)
         x = tf.keras.layers.Conv2D(num_filters, 3, padding='same', **kwargs)(x)
@@ -250,7 +250,7 @@ def downsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=T
         x = downsample_edsr(x, 2, name='conv2d_2_scale_2_down')
     return x
     
-def downsample(filters, size, norm_type='instancenorm', apply_norm=True):
+def downsample(filters, size, norm_type='instancenorm', apply_norm=False):
   """Downsamples an input.
   Conv2D => Batchnorm => LeakyRelu
   Args:
@@ -278,12 +278,12 @@ def downsample(filters, size, norm_type='instancenorm', apply_norm=True):
 def cyclegan_generator(args):
     x_in = tf.keras.layers.Input(shape=(None, None, 1))
     x = x_in
-    x = b = downsampleEDSR(x, 4, args.ngf, norm_type='instancenorm', apply_norm=True)
+    x = b = downsampleEDSR(x, 4, args.ngf, norm_type='instancenorm', apply_norm=False)
     for i in range(8):
-        b = res_block_EDSR(b, args.ngf, norm_type='instancenorm', apply_norm=True)
+        b = res_block_EDSR(b, args.ngf, norm_type='instancenorm', apply_norm=False)
     b = tf.keras.layers.Conv2D(args.ngf, 3, padding='same')(b)
-    x = tf.keras.layers.Add()([x, b])
-    x = upsampleEDSR(x, 4, args.ngf, norm_type='instancenorm', apply_norm=True)
+    x = tf.keras.layers.Concatenate()([x, b])
+    x = upsampleEDSR(x, 4, args.ngf, norm_type='instancenorm', apply_norm=False)
     x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
 
     x = tf.keras.layers.Activation('tanh')(x)
