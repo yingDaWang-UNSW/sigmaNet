@@ -67,7 +67,7 @@ def args():
     
     # model switches
     # ResNet-like, U-Net, EDSR, SRGAN-D, PatchGAN-D, EfficientNet, RFB-RRDB
-    
+    parser.add_argument('--generatorType', dest='generatorType', type=str, default='edsr', help='edsr,rrfdb-rrdb')
     # loss switches    
     # L1, L2, scgan, lsgan, relscgan, coefficients
     parser.add_argument('--sigmaCouplingFlag', dest='sigmaCouplingFlag', type=str2bool, default=True, help='sigmaCouplingFlag')

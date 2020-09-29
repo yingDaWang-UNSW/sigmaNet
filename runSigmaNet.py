@@ -211,6 +211,156 @@ def res_block_EDSR(x_in, filters, norm_type='instancenorm', apply_norm=False):
     x = tf.keras.layers.Add()([x_in, x])
     return x
     
+def res_block_RDB(x_in, filters, norm_type='instancenorm', apply_norm=False): # residual dense block
+    outFilters = filters//2
+    x1 = tf.keras.layers.Conv2D(outFilters, 3, padding='same')(x_in)
+    x1 = tf.keras.layers.LeakyReLU(alpha=0.2)(x1)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x1 = tf.keras.layers.BatchNormalization()(x1)
+        elif norm_type.lower() == 'instancenorm':
+            x1 = InstanceNormalization()(x1)
+    x2 = tf.keras.layers.Concatenate()([x_in,x1])
+    x2 = tf.keras.layers.Conv2D(outFilters, 3, padding='same')(x2)
+    x2 = tf.keras.layers.LeakyReLU(alpha=0.2)(x2)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x2 = tf.keras.layers.BatchNormalization()(x2)
+        elif norm_type.lower() == 'instancenorm':
+            x2 = InstanceNormalization()(x2)
+    x3 = tf.keras.layers.Concatenate()([x_in,x1,x2])
+    x3 = tf.keras.layers.Conv2D(outFilters, 3, padding='same')(x3)
+    x3 = tf.keras.layers.LeakyReLU(alpha=0.2)(x3)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x3 = tf.keras.layers.BatchNormalization()(x3)
+        elif norm_type.lower() == 'instancenorm':
+            x3 = InstanceNormalization()(x3)
+    x4 = tf.keras.layers.Concatenate()([x_in,x1,x2,x3])
+    x4 = tf.keras.layers.Conv2D(outFilters, 3, padding='same')(x4)
+    x4 = tf.keras.layers.LeakyReLU(alpha=0.2)(x4)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x4 = tf.keras.layers.BatchNormalization()(x4)
+        elif norm_type.lower() == 'instancenorm':
+            x4 = InstanceNormalization()(x4)
+    x5 = tf.keras.layers.Concatenate()([x_in,x1,x2,x3,x4])
+    x5 = tf.keras.layers.Conv2D(filters, 3, padding='same')(x5)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x5 = tf.keras.layers.BatchNormalization()(x5)
+        elif norm_type.lower() == 'instancenorm':
+            x5 = InstanceNormalization()(x5)
+    return x5 * 0.2 + x_in
+    
+def res_block_RRDB(x_in, filters, norm_type='instancenorm', apply_norm=False): # residual in residual dense block
+    x = res_block_RDB(x_in, filters, norm_type, apply_norm)
+    x = res_block_RDB(x, filters, norm_type, apply_norm)
+    x = res_block_RDB(x, filters, norm_type, apply_norm)
+    return x * 0.2 + x_in
+
+def res_block_RFB(x_in, filters, norm_type='instancenorm', apply_norm=False): # receptive field block
+    outFilters = filters//4
+    
+    x1 = tf.keras.layers.Conv2D(outFilters, 1, padding='same')(x_in)
+    x1 = tf.keras.layers.LeakyReLU(alpha=0.2)(x1)
+    x1 = tf.keras.layers.Conv2D(outFilters, 3, padding='same')(x1)
+    
+    x2 = tf.keras.layers.Conv2D(outFilters, 1, padding='same')(x_in)
+    x2 = tf.keras.layers.LeakyReLU(alpha=0.2)(x2)
+    x2 = tf.keras.layers.Conv2D(outFilters, (1,3), padding='same')(x2)
+    x2 = tf.keras.layers.LeakyReLU(alpha=0.2)(x2)
+    x2 = tf.keras.layers.Conv2D(outFilters, 3, padding='same',dilation_rate=3)(x2)
+    
+    x3 = tf.keras.layers.Conv2D(outFilters, 1, padding='same')(x_in)
+    x3 = tf.keras.layers.LeakyReLU(alpha=0.2)(x3)
+    x3 = tf.keras.layers.Conv2D(outFilters, (3,1), padding='same')(x3)
+    x3 = tf.keras.layers.LeakyReLU(alpha=0.2)(x3)
+    x3 = tf.keras.layers.Conv2D(outFilters, 3, padding='same',dilation_rate=3)(x3)
+    
+    x4 = tf.keras.layers.Conv2D(outFilters//2, 1, padding='same')(x_in)
+    x4 = tf.keras.layers.LeakyReLU(alpha=0.2)(x4)
+    x4 = tf.keras.layers.Conv2D(outFilters//4*3, (1,3), padding='same')(x4)
+    x4 = tf.keras.layers.LeakyReLU(alpha=0.2)(x4)
+    x4 = tf.keras.layers.Conv2D(outFilters, (3,1), padding='same')(x4)
+    x4 = tf.keras.layers.LeakyReLU(alpha=0.2)(x4)
+    x4 = tf.keras.layers.Conv2D(outFilters, 3, padding='same',dilation_rate=5)(x4)
+    
+    x5 = tf.keras.layers.Concatenate()([x1,x2,x3,x4])
+    x5 = tf.keras.layers.Conv2D(filters, 1, padding='same')(x5)
+    x0 = tf.keras.layers.Conv2D(filters, 1, padding='same')(x_in)
+    x5 = x5 + x0
+    return x5
+    
+def res_block_RFDB(x_in, filters, norm_type='instancenorm', apply_norm=False): # receptive field dense block
+    outFilters = filters//2
+    x1 = res_block_RFB(x_in, outFilters, norm_type='instancenorm', apply_norm=False)
+    x1 = tf.keras.layers.LeakyReLU(alpha=0.2)(x1)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x1 = tf.keras.layers.BatchNormalization()(x1)
+        elif norm_type.lower() == 'instancenorm':
+            x1 = InstanceNormalization()(x1)
+    x2 = tf.keras.layers.Concatenate()([x_in,x1])
+    x2 = res_block_RFB(x2, outFilters, norm_type, apply_norm)
+    x2 = tf.keras.layers.LeakyReLU(alpha=0.2)(x2)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x2 = tf.keras.layers.BatchNormalization()(x2)
+        elif norm_type.lower() == 'instancenorm':
+            x2 = InstanceNormalization()(x2)
+    x3 = tf.keras.layers.Concatenate()([x_in,x1,x2])
+    x3 = res_block_RFB(x3, outFilters, norm_type, apply_norm)
+    x3 = tf.keras.layers.LeakyReLU(alpha=0.2)(x3)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x3 = tf.keras.layers.BatchNormalization()(x3)
+        elif norm_type.lower() == 'instancenorm':
+            x3 = InstanceNormalization()(x3)
+    x4 = tf.keras.layers.Concatenate()([x_in,x1,x2,x3])
+    x4 = res_block_RFB(x4, outFilters, norm_type, apply_norm)
+    x4 = tf.keras.layers.LeakyReLU(alpha=0.2)(x4)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x4 = tf.keras.layers.BatchNormalization()(x4)
+        elif norm_type.lower() == 'instancenorm':
+            x4 = InstanceNormalization()(x4)
+    x5 = tf.keras.layers.Concatenate()([x_in,x1,x2,x3,x4])
+    x5 = res_block_RFB(x5, filters, norm_type, apply_norm)
+    if apply_norm:
+        if norm_type.lower() == 'batchnorm':
+            x5 = tf.keras.layers.BatchNormalization()(x5)
+        elif norm_type.lower() == 'instancenorm':
+            x5 = InstanceNormalization()(x5)
+    return x5 * 0.2 + x_in
+    
+def res_block_RRFDB(x_in, filters, norm_type='instancenorm', apply_norm=False): # residual receptive field dense block
+    x = res_block_RFDB(x_in, filters, norm_type, apply_norm)
+    x = res_block_RFDB(x, filters, norm_type, apply_norm)
+    x = res_block_RFDB(x, filters, norm_type, apply_norm)
+    return x * 0.2 + x_in
+    
+def upsampleRRFBRRDB(x, scale, num_filters, norm_type='instancenorm', apply_norm=False):
+    def upsample_RFB(x, factor, **kwargs):
+    
+        x = res_block_RFB(x, num_filters, norm_type, apply_norm)
+        x = tf.keras.layers.LeakyReLU(alpha=0.2)(x)
+        
+        if apply_norm:
+            if norm_type.lower() == 'batchnorm':
+                x = tf.keras.layers.BatchNormalization()(x)
+            elif norm_type.lower() == 'instancenorm':
+                x = InstanceNormalization()(x)
+        return SubpixelConv2D(factor)(x)
+    if scale == 2:
+        x = upsample_RFB(x, 2, name='conv2d_1_scale_2_up')
+    elif scale == 3:
+        x = upsample_RFB(x, 3, name='conv2d_1_scale_3_up')
+    elif scale == 4:
+        x = upsample_RFB(x, 2, name='conv2d_1_scale_2_up')
+        x = upsample_RFB(x, 2, name='conv2d_2_scale_2_up')
+    return x
+    
 def upsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=False):
     def upsample_edsr(x, factor, **kwargs):
         x = tf.keras.layers.Conv2D(num_filters * (factor ** 2), 3, padding='same', **kwargs)(x)
@@ -306,7 +456,7 @@ def discriminatorCGAN(norm_type='instancenorm', target=False):
 
   if target:
     tar = tf.keras.layers.Input(shape=[None, None, 3], name='target_image')
-    x = tf.keras.layers.concatenate([inp, tar])  # (bs, 256, 256, channels*2)
+    x = tf.keras.layers.Concatenate()([inp, tar])  # (bs, 256, 256, channels*2)
 
   down1 = downsample(args.ndf, 4, norm_type, False)(x)  # (bs, 128, 128, 64)
   down2 = downsample(args.ndf*2, 4, norm_type)(down1)  # (bs, 64, 64, 128)
@@ -393,11 +543,47 @@ def edsr(scale, num_filters=64, num_res_blocks=8):
     x = tf.keras.layers.Add()([x, b])
 
     x = upsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=False)
+    
     x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
-
     x = tf.keras.layers.Activation('tanh')(x)
+    
     return tf.keras.models.Model(x_in, x, name="EDSR")
 
+def RRFDB_RRDB_SRGAN(scale, num_filters=64, num_res_blocks=8):
+    x_in = tf.keras.layers.Input(shape=(None, None, 1))
+    x = x_in
+    x = b = tf.keras.layers.Conv2D(num_filters, 3, padding='same')(x)
+    for i in range(num_res_blocks):
+        b = res_block_RRDB(b, num_filters, norm_type='instancenorm', apply_norm=False)
+    for i in range(num_res_blocks//2):
+        b = res_block_RRFDB(b, num_filters, norm_type='instancenorm', apply_norm=False)
+    x = tf.keras.layers.Add()([x, b])
+    x = res_block_RFB(x, num_filters, norm_type='instancenorm', apply_norm=False)
+    x = upsampleRRFBRRDB(x, scale, num_filters, norm_type='instancenorm', apply_norm=False)
+    x = res_block_RFB(x, num_filters, norm_type='instancenorm', apply_norm=False)
+    x = tf.keras.layers.LeakyReLU(alpha=0.2)(x)
+    x = tf.keras.layers.Conv2D(num_filters, 3, padding='same')(x)
+    x = tf.keras.layers.LeakyReLU(alpha=0.2)(x)
+    x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
+    x = tf.keras.layers.Activation('tanh')(x)
+    return tf.keras.models.Model(x_in, x, name="RRFDB-RRDB")
+    
+def RRDB_SRGAN(scale, num_filters=64, num_res_blocks=8):
+    x_in = tf.keras.layers.Input(shape=(None, None, 1))
+    x = x_in
+    x = b = tf.keras.layers.Conv2D(num_filters, 3, padding='same')(x)
+    for i in range(num_res_blocks):
+        b = res_block_RRDB(b, num_filters, norm_type='instancenorm', apply_norm=False)
+        
+    b = tf.keras.layers.Conv2D(num_filters, 3, padding='same')(b)
+    x = tf.keras.layers.Add()([x, b])
+
+    x = upsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=False)
+    x = tf.keras.layers.Conv2D(num_filters, 3, padding='same')(x)
+    x = tf.keras.layers.ReLU()(x)
+    x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
+    x = tf.keras.layers.Activation('tanh')(x)
+    return tf.keras.models.Model(x_in, x, name="RRFDB-RRDB")
 
 #generatorAB = cyclegan_generator(args)
 #generatorBA = cyclegan_generator(args)
@@ -509,7 +695,12 @@ with strategy.scope():
         return discriminator, optimizerDiscriminator
     
     def createSRGenerator(args):
-        generator = edsr(scale=4, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks)
+        if args.generatorType == 'edsr':
+            generator = edsr(scale=4, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks)
+        elif args.generatorType == 'rrfdb-rrdb':
+            generator = RRFDB_RRDB_SRGAN(scale=4, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks)
+        elif args.generatorType == 'rrdb':
+            generator = RRDB_SRGAN(scale=4, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks)
         generator.summary(200)
         optimizerGenerator = tf.keras.optimizers.Adam(lr=args.lr)
         return generator, optimizerGenerator
