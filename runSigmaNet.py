@@ -56,6 +56,16 @@ else:
 
 # define the network
 with strategy.scope():
+    def visualize(original, augmented):
+      fig = plt.figure()
+      plt.subplot(1,2,1)
+      plt.title('Original image')
+      plt.imshow(original)
+
+      plt.subplot(1,2,2)
+      plt.title('Augmented image')
+      plt.imshow(augmented)
+
     def loadtf2(image_file):
       """Loads the image and generates input and target image.
       Args:
@@ -139,12 +149,19 @@ with strategy.scope():
     def normalize(image):
       image = (image / 127.5) - 1
       return image
-
+      
+    def saturateAndAdjustBrightness(image):
+      image = tf.image.random_contrast(image, 0, 0.4)
+      image = tf.image.random_brightness(image, 0.4)
+      image = tf.clip_by_value(image,-1,1)
+      return image
+      
     @tf.function
     def loadRealLR(image_file):
       imageLR = loadtf2(image_file)
       imageLR = random_croptf2(imageLR, args.fine_size, args.fine_size)
       imageLR = normalize(imageLR)
+      imageLR = saturateAndAdjustBrightness(imageLR)
       #imageLR = tf.squeeze(tf.stack([imageLR, imageLR, imageLR],2))
       return imageLR
 
@@ -153,6 +170,7 @@ with strategy.scope():
       imageHR = loadtf2(image_file)
       imageHR = random_croptf2(imageHR, args.fine_size*args.scale, args.fine_size*args.scale)
       imageHR = normalize(imageHR)
+      imageHR = saturateAndAdjustBrightness(imageHR)
       imageBC = resizetf2(imageHR, args.fine_size, args.fine_size)
       #imageHR = tf.squeeze(tf.stack([imageHR, imageHR, imageHR],2))
       #imageBC = tf.squeeze(tf.stack([imageBC, imageBC, imageBC],2))
