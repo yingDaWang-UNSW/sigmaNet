@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -P zt36
+#PBS -q gpuvolta
+#PBS -l walltime=48:00:00
+#PBS -l mem=128GB
+#PBS -l jobfs=1GB
+#PBS -l ncpus=48
+#PBS -l ngpus=4
+#PBS -l storage=scratch/m65
+#PBS -l storage=/home/561/yw5484
+#PBS -l software=my_program
+#PBS -l wd
+cd $PBS_O_WORKDIR
+~/anaconda3/bin/conda init bash
+source ~/.bashrc
+source ~/anaconda3/etc/profile.d/conda.sh
+conda activate cleanTF2
+conda info --envs
+python /scratch/m65/yw5484/sigmaNet/runSigmaNet.py --batch_size 64 --generatorType 'edsr' --ganFlag 0 --srDiscLoss 'SC' --cycleDiscLoss 'LS' --modelName 'cyclegan-lsgan-resnetstyle-subpix-edsr-coupled-128' --dataset_dir '/scratch/m65/yw5484/cycleGANSRANU_2D/' --sigmaCouplingFlag 1 | tee gadiOmegaNetLog_cyclegan-lsgan-resnetstyle-subpix-edsr-coupled-128.txt
