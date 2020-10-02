@@ -151,7 +151,7 @@ with strategy.scope():
     @tf.function
     def loadRealHRandBC(image_file):
       imageHR = loadtf2(image_file)
-      imageHR = random_croptf2(imageHR, args.fine_size*4, args.fine_size*4)
+      imageHR = random_croptf2(imageHR, args.fine_size*args.scale, args.fine_size*args.scale)
       imageHR = normalize(imageHR)
       imageBC = resizetf2(imageHR, args.fine_size, args.fine_size)
       #imageHR = tf.squeeze(tf.stack([imageHR, imageHR, imageHR],2))
@@ -545,7 +545,7 @@ with strategy.scope():
 
     def DiscriminatorSRGAN(args):
         #xIn = tf.keras.layers.Input(shape=[args.fine_size, args.fine_size, args.output_nc], name='Disc_Inputs')
-        xIn = tf.keras.layers.Input(shape=[args.fine_size*4, args.fine_size*4, 1], name='Disc_Inputs')
+        xIn = tf.keras.layers.Input(shape=[args.disc_size, args.disc_size, 1], name='Disc_Inputs')
         # shallow layers
         x = tf.keras.layers.Conv2D(args.ndf, 3, 1, padding='same')(xIn)
         x = tf.keras.layers.LeakyReLU()(x)
@@ -863,8 +863,8 @@ with strategy.scope():
                 gsrLoss = meanSquaredError(C, C_sr)
                 
             if args.ganFlag:
-                disc_real_C = discriminatorSR(C, training=True)
-                disc_fake_C = discriminatorSR(C_sr, training=True)
+                disc_real_C = discriminatorSR(C[:,0:args.disc_size,0:args.disc_size,:], training=True)
+                disc_fake_C = discriminatorSR(C_sr[:,0:args.disc_size,0:args.disc_size,:], training=True)
 
                 if args.srDiscLoss == 'LS':
                     advsrLoss = advLsganLoss(disc_fake_C)
@@ -887,7 +887,7 @@ with strategy.scope():
                 elif args.srPixelwiseLoss == 'L2':
                     gsrLoss = gsrLoss + meanSquaredError(C, C_clean)                
                 if args.ganFlag:
-                    disc_fake_CC = discriminatorSR(C_sr, training=True)
+                    disc_fake_CC = discriminatorSR(C_clean[:,0:args.disc_size,0:args.disc_size,:], training=True)
 
                     if args.srDiscLoss == 'LS':
                         advsrLoss = advsrLoss + advLsganLoss(disc_fake_CC)
@@ -908,7 +908,7 @@ with strategy.scope():
                 elif args.srPixelwiseLoss == 'L2':
                     gsrLoss = gsrLoss + meanSquaredError(C, C_clean_cycle)                
                 if args.ganFlag:
-                    disc_fake_CCC = discriminatorSR(C_sr, training=True)
+                    disc_fake_CCC = discriminatorSR(C_clean_cycle[:,0:args.disc_size,0:args.disc_size,:], training=True)
 
                     if args.srDiscLoss == 'LS':
                         advsrLoss = advsrLoss + advLsganLoss(disc_fake_CCC)

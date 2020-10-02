@@ -42,6 +42,7 @@ def args():
     parser.add_argument('--iterNum', dest='iterNum', type=str2int, default=21101, help='# iterations per epoch') # not used right now
     parser.add_argument('--valNum', dest='valNum', type=str2int, default=25, help='# max val images') # not used right now
     parser.add_argument('--fine_size', dest='fine_size', type=str2int, default=128, help='then crop LR to this size')
+    parser.add_argument('--disc_size', dest='disc_size', type=str2int, default=128, help='then crop HR to this size')
     parser.add_argument('--ngf', dest='ngf', type=int, default=64, help='# of gen filters in first conv layer')
     parser.add_argument('--ndf', dest='ndf', type=int, default=32, help='# of discri filters in first conv layer')
     parser.add_argument('--ngsrf', dest='ngsrf', type=str2int, default=64, help='# of gen SR filters in first conv layer')
