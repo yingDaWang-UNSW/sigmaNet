@@ -1005,7 +1005,7 @@ with strategy.scope():
         valoutDir = args.dataset_dir.split('/')[-2]
         # Create a checkpoint directory to store the checkpoints.
         rightNow=datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-        trainOutputDir=f'./training_outputs/{rightNow}-distNN-{valoutDir}/'
+        trainOutputDir=f'./training_outputs/{rightNow}-distNN-{valoutDir}-{args.modelName}/'
         if not os.path.exists(trainingDir):
             os.mkdir(trainingDir)
         os.mkdir(trainOutputDir)

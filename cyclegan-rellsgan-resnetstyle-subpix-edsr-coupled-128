@@ -16,4 +16,4 @@ source ~/.bashrc
 source ~/anaconda3/etc/profile.d/conda.sh
 conda activate cleanTF2
 conda info --envs
-python /scratch/m65/yw5484/omegaNet/runSigmaNet.py --batch_size 64 --generatorType 'edsr' --ganFlag 0 --srDiscLoss 'SC' --cycleDiscLoss 'RelLS' --modelName 'cyclegan-rellsgan-resnetstyle-subpix-edsr-coupled-128' --dataset_dir '/scratch/m65/yw5484/cycleGANSRANU_2D/' --sigmaCouplingFlag 1 | tee gadiOmegaNetLog_cyclegan-rellsgan-resnetstyle-subpix-edsr-coupled-128.txt
+python /scratch/m65/yw5484/omegaNet/sigmaNet/runSigmaNet.py --batch_size 64 --generatorType 'edsr' --ganFlag 0 --srDiscLoss 'SC' --cycleDiscLoss 'RelLS' --modelName 'cyclegan-rellsgan-resnetstyle-subpix-edsr-coupled-128' --dataset_dir '/scratch/m65/yw5484/cycleGANSRANU_2D/' --sigmaCouplingFlag 1 | tee gadiOmegaNetLog_cyclegan-rellsgan-resnetstyle-subpix-edsr-coupled-128.txt
