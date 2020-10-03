@@ -135,11 +135,11 @@ with strategy.scope():
       return x
 
     def resizetf2(image, height, width):
-      k = build_filter(factor=2)
-      image=tf.expand_dims(image,0)
-      image = apply_bicubic_downsample(apply_bicubic_downsample(image, filter=k, factor=2), filter=k, factor=2)
-      image=tf.expand_dims(tf.squeeze(image),2)
-    #  image = tf.image.resize(image, [height, width],method=tf.image.ResizeMethod.BICUBIC)
+#      k = build_filter(factor=2)
+#      image=tf.expand_dims(image,0)
+#      image = apply_bicubic_downsample(apply_bicubic_downsample(image, filter=k, factor=2), filter=k, factor=2)
+#      image=tf.expand_dims(tf.squeeze(image),2)
+      image = tf.image.resize(image, [height, width],method=tf.image.ResizeMethod.BICUBIC)
       return image
       
     def random_croptf2(image, height, width):
@@ -182,6 +182,10 @@ with strategy.scope():
     def loadRealLRTest(image_file):
       imageLR = loadtf2(image_file)
       imageLR = normalize(imageLR)
+      if args.val_size>0:
+        imageLR = random_croptf2(imageLR, args.val_size, args.val_size)
+      else:
+        imageLR = imageLR[0:imageLR.shape[0]//4*4,0:imageLR.shape[1]//4*4]
       #imageLR = tf.squeeze(tf.stack([imageLR, imageLR, imageLR],2))
       return imageLR
 
@@ -189,7 +193,12 @@ with strategy.scope():
     def loadRealHRandBCTest(image_file):
       imageHR = loadtf2(image_file)
       imageHR = normalize(imageHR)
-      imageBC = resizetf2(imageHR, args.fine_size, args.fine_size)
+      if args.val_size>0:
+        imageHR = random_croptf2(imageHR, args.val_size*args.scale, args.val_size*args.scale)
+        imageBC = resizetf2(imageHR, args.val_size, args.val_size)
+      else:
+        imageHR = imageHR[0:imageHR.shape[0]//4/args.scale*4*args.scale,0:imageHR.shape[1]//4/args.scale*4*args.scale]
+        imageBC = resizetf2(imageHR, imageHR.shape[0]//args.scale, imageHR.shape[1]//args.scale)
       #imageHR = tf.squeeze(tf.stack([imageHR, imageHR, imageHR],2))
       #imageBC = tf.squeeze(tf.stack([imageBC, imageBC, imageBC],2))
       return imageHR, imageBC
@@ -769,11 +778,11 @@ with strategy.scope():
     
     def createSRGenerator(args):
         if args.generatorType == 'edsr':
-            generator = edsr(scale=4, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks)
+            generator = edsr(scale=args.scale, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks)
         elif args.generatorType == 'rrfdb-rrdb':
-            generator = RRFDB_RRDB_SRGAN(scale=4, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks, num_res_rfb_blocks=args.numResRFBBlocks)
+            generator = RRFDB_RRDB_SRGAN(scale=args.scale, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks, num_res_rfb_blocks=args.numResRFBBlocks)
         elif args.generatorType == 'rrdb':
-            generator = RRDB_SRGAN(scale=4, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks)
+            generator = RRDB_SRGAN(scale=args.scale, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks)
         generator.summary(200)
         optimizerGenerator = tf.keras.optimizers.Adam(lr=args.lr)
         optimizerGenerator = mixed_precision.LossScaleOptimizer(optimizerGenerator, loss_scale='dynamic')
@@ -944,7 +953,6 @@ with strategy.scope():
                 totalGABLoss = totalGABLoss + args.sigmaCoupling_lambda*totalGsrLoss
                 totalGBALoss = totalGBALoss + args.sigmaCoupling_lambda*totalGsrLoss
 
-
             totalGABLossScal = optimizerGeneratorAB.get_scaled_loss(totalGABLoss)
             totalGBALossScal = optimizerGeneratorBA.get_scaled_loss(totalGBALoss)
             totalDALossScal = optimizerDiscriminatorA.get_scaled_loss(totalDALoss)
@@ -1009,8 +1017,8 @@ with strategy.scope():
         if not os.path.exists(trainingDir):
             os.mkdir(trainingDir)
         os.mkdir(trainOutputDir)
-        train_template = ("\rEpoch %4d, Iter %4d, Time %4.4f, Speed %4.4f its/s, GABL: %4.4f, ADVABL: %4.4f, GBAL: %4.4f, ADVBAL: %4.4f, DAL: %4.4f, DBL: %4.4f, GSRL: %4.4f, ADVSRL: %4.4f, DSRL: %4.4f")
-        test_template = ("\rIter %4d, Test PSNR-A: %4.4f, PSNR-B: %4.4f, PSNR-SR: %4.4f, PSNR-SRC: %4.4f, PSNR-SRCC: %4.4f")
+        train_template = ("\rEpoch: %4d, Iter: %4d, Time: %4.4f, Speed: %4.4f its/s, GABL: %4.4f, ADVABL: %4.4f, GBAL: %4.4f, ADVBAL: %4.4f, DAL: %4.4f, DBL: %4.4f, GSRL: %4.4f, ADVSRL: %4.4f, DSRL: %4.4f")
+        test_template = ("\rIter: %4d, Test: PSNR-A: %4.4f, PSNR-B: %4.4f, PSNR-SR: %4.4f, PSNR-SRC: %4.4f, PSNR-SRCC: %4.4f")
         
         realLR_dataset_dist = strategy.experimental_distribute_dataset(realLR_dataset)
         realHR_and_synLR_dataset_dist = strategy.experimental_distribute_dataset(realHR_and_synLR_dataset)
@@ -1039,25 +1047,25 @@ with strategy.scope():
             totDSRL = 0
             num_batches = 0
             print(f'Learning Rate: {lr:.4e}')
-            for x, y in zip(realLR_dataset_dist, realHR_and_synLR_dataset_dist):
-                GABL, ADVABL, GBAL, ADVBAL, DAL, DBL, GSRL, ADVSRL, DSRL = distributed_train_step(x,y)
-                totGABL += GABL
-                totGBAL += GBAL
-                totDAL += DAL
-                totDBL += DBL
-                totGSRL += GSRL
-                totDSRL += DSRL
-                totADVABL += ADVABL
-                totADVBAL += ADVBAL
-                totADVSRL += ADVSRL
-                num_batches += 1
-                currentTime=time.time()
-                stdout.write(train_template % (epoch+1, num_batches, currentTime-start_time, 1/(currentTime-lastTime),GABL, ADVABL, GBAL, ADVBAL, DAL, DBL, GSRL, ADVSRL, DSRL))
-                stdout.flush()
-                lastTime=currentTime
-                if num_batches==args.iterNum:
-                    break
-                
+            while num_batches < args.itersPerEpoch:
+                for x, y in zip(realLR_dataset_dist, realHR_and_synLR_dataset_dist):
+                    GABL, ADVABL, GBAL, ADVBAL, DAL, DBL, GSRL, ADVSRL, DSRL = distributed_train_step(x,y)
+                    totGABL += GABL
+                    totGBAL += GBAL
+                    totDAL += DAL
+                    totDBL += DBL
+                    totGSRL += GSRL
+                    totDSRL += DSRL
+                    totADVABL += ADVABL
+                    totADVBAL += ADVBAL
+                    totADVSRL += ADVSRL
+                    num_batches += 1
+                    currentTime=time.time()
+                    stdout.write(train_template % (epoch+1, num_batches, currentTime-start_time, 1/(currentTime-lastTime),GABL, ADVABL, GBAL, ADVBAL, DAL, DBL, GSRL, ADVSRL, DSRL))
+                    stdout.flush()
+                    lastTime=currentTime
+                    if num_batches==args.iterNum or num_batches==args.itersPerEpoch:
+                        break
             stdout.write("\n")
             totGABL /= num_batches
             totGBAL /= num_batches
@@ -1083,9 +1091,6 @@ with strategy.scope():
                 for A, BC in zip(realLR_dataset_test, realHR_and_synLR_dataset_test):
                     B = BC[1]
                     C = BC[0]
-                    A = A[:,0:A.shape[1]//4*4,0:A.shape[2]//4*4,:]
-                    B = B[:,0:B.shape[1]//4*4,0:B.shape[2]//4*4,:]
-                    C = C[:,0:C.shape[1]//16*16,0:C.shape[2]//16*16,:]
 
                     fakeB = generatorAB(A, training=False)
                     cycleA = generatorBA(fakeB, training=False) 

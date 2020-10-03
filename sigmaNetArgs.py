@@ -40,10 +40,12 @@ def args():
     parser.add_argument('--epoch', dest='epoch', type=str2int, default=500, help='# of epoch')
     parser.add_argument('--scale', dest='scale', type=str2int, default=4, help='sr scale factor')
     parser.add_argument('--batch_size', dest='batch_size', type=str2int, default=64, help='# images in batch')
-    parser.add_argument('--iterNum', dest='iterNum', type=str2int, default=21101, help='# iterations per epoch') # not used right now
-    parser.add_argument('--valNum', dest='valNum', type=str2int, default=25, help='# max val images') # not used right now
+    parser.add_argument('--iterNum', dest='iterNum', type=str2int, default=21101, help='# iterations per epoch') 
+    parser.add_argument('--itersPerEpoch', dest='itersPerEpoch', type=str2int, default=1000, help='# iterations per epoch') 
+    parser.add_argument('--valNum', dest='valNum', type=str2int, default=25, help='# max val images') 
+    parser.add_argument('--val_size', dest='val_size', type=str2int, default=0, help='# max val crop, set to zero for no crop') 
     parser.add_argument('--fine_size', dest='fine_size', type=str2int, default=128, help='then crop LR to this size')
-    parser.add_argument('--disc_size', dest='disc_size', type=str2int, default=128, help='then crop HR to this size')
+    parser.add_argument('--disc_size', dest='disc_size', type=str2int, default=128, help='then crop HR to this size during disc')
     parser.add_argument('--ngf', dest='ngf', type=int, default=64, help='# of gen filters in first conv layer')
     parser.add_argument('--ndf', dest='ndf', type=int, default=32, help='# of discri filters in first conv layer')
     parser.add_argument('--ngsrf', dest='ngsrf', type=str2int, default=64, help='# of gen SR filters in first conv layer')
