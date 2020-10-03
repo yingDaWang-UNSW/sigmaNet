@@ -161,7 +161,8 @@ with strategy.scope():
       imageLR = loadtf2(image_file)
       imageLR = random_croptf2(imageLR, args.fine_size, args.fine_size)
       imageLR = normalize(imageLR)
-      imageLR = saturateAndAdjustBrightness(imageLR)
+      if args.augFlag:
+        imageLR = saturateAndAdjustBrightness(imageLR)
       #imageLR = tf.squeeze(tf.stack([imageLR, imageLR, imageLR],2))
       return imageLR
 
@@ -170,7 +171,8 @@ with strategy.scope():
       imageHR = loadtf2(image_file)
       imageHR = random_croptf2(imageHR, args.fine_size*args.scale, args.fine_size*args.scale)
       imageHR = normalize(imageHR)
-      imageHR = saturateAndAdjustBrightness(imageHR)
+      if args.augFlag:
+        imageHR = saturateAndAdjustBrightness(imageHR)
       imageBC = resizetf2(imageHR, args.fine_size, args.fine_size)
       #imageHR = tf.squeeze(tf.stack([imageHR, imageHR, imageHR],2))
       #imageBC = tf.squeeze(tf.stack([imageBC, imageBC, imageBC],2))
@@ -419,7 +421,7 @@ with strategy.scope():
             x = upsample_RFB(x, 2, name='conv2d_3_scale_2_up')
         return x
         
-    def upsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=False):
+    def upsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=False, nameIn=''):
         def upsample_edsr(x, factor, **kwargs):
             x = tf.keras.layers.Conv2D(num_filters * (factor ** 2), 3, padding='same', **kwargs)(x)
             x = tf.keras.layers.Activation('relu')(x)
@@ -430,19 +432,19 @@ with strategy.scope():
                     x = InstanceNormalization()(x)
             return SubpixelConv2D(factor)(x)
         if scale == 2:
-            x = upsample_edsr(x, 2, name='conv2d_1_scale_2_up')
+            x = upsample_edsr(x, 2, name='conv2d_1_scale_2_up'+nameIn)
         elif scale == 3:
-            x = upsample_edsr(x, 3, name='conv2d_1_scale_3_up')
+            x = upsample_edsr(x, 3, name='conv2d_1_scale_3_up'+nameIn)
         elif scale == 4:
-            x = upsample_edsr(x, 2, name='conv2d_1_scale_2_up')
-            x = upsample_edsr(x, 2, name='conv2d_2_scale_2_up')
+            x = upsample_edsr(x, 2, name='conv2d_1_scale_2_up'+nameIn)
+            x = upsample_edsr(x, 2, name='conv2d_2_scale_2_up'+nameIn)
         elif scale == 8:
-            x = upsample_edsr(x, 2, name='conv2d_1_scale_2_up')
-            x = upsample_edsr(x, 2, name='conv2d_2_scale_2_up')
-            x = upsample_edsr(x, 2, name='conv2d_3_scale_2_up')
+            x = upsample_edsr(x, 2, name='conv2d_1_scale_2_up'+nameIn)
+            x = upsample_edsr(x, 2, name='conv2d_2_scale_2_up'+nameIn)
+            x = upsample_edsr(x, 2, name='conv2d_3_scale_2_up'+nameIn)
         return x
         
-    def downsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=False):
+    def downsampleEDSR(x, scale, num_filters, norm_type='instancenorm', apply_norm=False, nameIn=''):
         def downsample_edsr(x, factor, **kwargs):
             x = SubpixelConv2DDown(factor)(x)
             x = tf.keras.layers.Conv2D(num_filters, 3, padding='same', **kwargs)(x)
@@ -454,16 +456,16 @@ with strategy.scope():
                     x = InstanceNormalization()(x)
             return x
         if scale == 2:
-            x = downsample_edsr(x, 2, name='conv2d_1_scale_2_down')
+            x = downsample_edsr(x, 2, name='conv2d_1_scale_2_down'+nameIn)
         elif scale == 3:
-            x = downsample_edsr(x, 3, name='conv2d_1_scale_3_down')
+            x = downsample_edsr(x, 3, name='conv2d_1_scale_3_down'+nameIn)
         elif scale == 4:
-            x = downsample_edsr(x, 2, name='conv2d_1_scale_2_down')
-            x = downsample_edsr(x, 2, name='conv2d_2_scale_2_down')
+            x = downsample_edsr(x, 2, name='conv2d_1_scale_2_down'+nameIn)
+            x = downsample_edsr(x, 2, name='conv2d_2_scale_2_down'+nameIn)
         elif scale == 8:
-            x = downsample_edsr(x, 2, name='conv2d_1_scale_2_down')
-            x = downsample_edsr(x, 2, name='conv2d_2_scale_2_down')
-            x = downsample_edsr(x, 2, name='conv2d_3_scale_2_down')
+            x = downsample_edsr(x, 2, name='conv2d_1_scale_2_down'+nameIn)
+            x = downsample_edsr(x, 2, name='conv2d_2_scale_2_down'+nameIn)
+            x = downsample_edsr(x, 2, name='conv2d_3_scale_2_down'+nameIn)
         return x
         
     def downsample(filters, size, norm_type='instancenorm', apply_norm=False):
@@ -494,24 +496,26 @@ with strategy.scope():
     def cyclegan_generator(args):
         x_in = tf.keras.layers.Input(shape=(None, None, 1))
         x = x_in
-        x = b = downsampleEDSR(x, 4, args.ngf, norm_type='instancenorm', apply_norm=False)
+        x = tf.keras.layers.Conv2D(args.ngf, 3, padding='same')(x)
+        x1 = x = downsampleEDSR(x, 2, args.ngf*2, norm_type='instancenorm', apply_norm=False,nameIn='cycleganEncode1')
+        x2 = x = downsampleEDSR(x, 2, args.ngf*4, norm_type='instancenorm', apply_norm=False,nameIn='cycleganEncode2')
         for i in range(8):
-            b = res_block_EDSR(b, args.ngf, norm_type='instancenorm', apply_norm=False)
-        b = tf.keras.layers.Conv2D(args.ngf, 3, padding='same')(b)
-        x = tf.keras.layers.Concatenate()([x, b])
-        x = upsampleEDSR(x, 4, args.ngf, norm_type='instancenorm', apply_norm=False)
+            x = res_block_EDSR(x, args.ngf*4, norm_type='instancenorm', apply_norm=False)
+        x = tf.keras.layers.Conv2D(args.ngf*4, 3, padding='same')(x)
+        x = tf.keras.layers.Concatenate()([x2, x])
+        x = upsampleEDSR(x, 2, args.ngf*2, norm_type='instancenorm', apply_norm=False,nameIn='cycleganDecode1')
+        x = tf.keras.layers.Concatenate()([x1, x])
+        x = upsampleEDSR(x, 2, args.ngf, norm_type='instancenorm', apply_norm=False,nameIn='cycleganDecode2')
         x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
 
         x = tf.keras.layers.Activation('tanh', dtype='float32')(x)
         return tf.keras.models.Model(x_in, x, name="cycleganGenerator")
 
 
-    def discriminatorCGAN(norm_type='instancenorm', target=False):
+    def discriminatorCGAN(norm_type='instancenorm'):
       """PatchGan discriminator model (https://arxiv.org/abs/1611.07004).
       Args:
         norm_type: Type of normalization. Either 'batchnorm' or 'instancenorm'.
-        target: Bool, indicating whether target image is an input or not.
-      Returns:
         Discriminator model
       """
 
@@ -519,10 +523,6 @@ with strategy.scope():
 
       inp = tf.keras.layers.Input(shape=[None, None, 1], name='input_image')
       x = inp
-
-      if target:
-        tar = tf.keras.layers.Input(shape=[None, None, 3], name='target_image')
-        x = tf.keras.layers.Concatenate()([inp, tar])  # (bs, 256, 256, channels*2)
 
       down1 = downsample(args.ndf, 4, norm_type, False)(x)  # (bs, 128, 128, 64)
       down2 = downsample(args.ndf*2, 4, norm_type)(down1)  # (bs, 64, 64, 128)
@@ -542,14 +542,9 @@ with strategy.scope():
 
       zero_pad2 = tf.keras.layers.ZeroPadding2D()(leaky_relu)  # (bs, 33, 33, 512)
 
-      last = tf.keras.layers.Conv2D(
-          1, 4, strides=1,
-          kernel_initializer=initializer, dtype='float32')(zero_pad2)  # (bs, 30, 30, 1)
+      last = tf.keras.layers.Conv2D(1, 4, strides=1, kernel_initializer=initializer, dtype='float32')(zero_pad2)  # (bs, 30, 30, 1)
 
-      if target:
-        return tf.keras.Model(inputs=[inp, tar], outputs=last, name="DiscrimCycle")
-      else:
-        return tf.keras.Model(inputs=inp, outputs=last, name="DiscrimCycle")
+      return tf.keras.Model(inputs=inp, outputs=last, name="DiscrimCycle")
 
     def disc_block(x_in, filters):
         x = tf.keras.layers.Conv2D(filters, 3, 1, padding='same')(x_in)
@@ -649,7 +644,7 @@ with strategy.scope():
         x = tf.keras.layers.ReLU()(x)
         x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
         x = tf.keras.layers.Activation('tanh', dtype='float32')(x)
-        return tf.keras.models.Model(x_in, x, name="RRFDB-RRDB")
+        return tf.keras.models.Model(x_in, x, name="RRDB")
 
     #generatorAB = cyclegan_generator(args)
     #generatorBA = cyclegan_generator(args)
@@ -766,7 +761,7 @@ with strategy.scope():
         return generator, optimizerGenerator
         
     def createDiscriminator(args):    
-        discriminator = discriminatorCGAN(norm_type='instancenorm', target=False)
+        discriminator = discriminatorCGAN(norm_type='instancenorm')
         discriminator.summary(200)
         optimizerDiscriminator = tf.keras.optimizers.Adam(lr=args.lr)    
         optimizerDiscriminator = mixed_precision.LossScaleOptimizer(optimizerDiscriminator, loss_scale='dynamic')     
@@ -999,6 +994,11 @@ with strategy.scope():
         generatorSR=tf.keras.models.load_model(f'{trainingDir}/GSR')
         if args.ganFlag:
             discriminatorSR=tf.keras.models.load_model(f'{trainingDir}/DSR')
+        if args.sigmaType == 'gamma':
+            generatorSRC = tf.keras.models.load_model(f'{trainingDir}/GSRC')
+            if args.ganFlag:
+                discriminatorSRC=tf.keras.models.load_model(f'{trainingDir}/DSRC')
+    
     # run
     if args.phase == 'train':
         EPOCHS = args.epoch
@@ -1096,6 +1096,10 @@ with strategy.scope():
                     fakeC = generatorSR(fakeA, training=False)
                     fakeC_clean = generatorSR(B, training=False)
                     fakeC_clean_cycle = generatorSR(cycleB, training=False)
+                    
+                    Asr = generatorSR(A, training=False)
+                    ABsr = generatorSR(fakeB, training=False)
+                    ABAsr = generatorSR(cycleA, training=False)
                     A = np.asarray(A)
                     B = np.asarray(B)
                     C = np.asarray(C)
@@ -1107,6 +1111,10 @@ with strategy.scope():
                     fakeC = np.asarray(fakeC)
                     fakeC_clean = np.asarray(fakeC_clean)
                     fakeC_clean_cycle = np.asarray(fakeC_clean_cycle)
+                    
+                    Asr = np.asarray(Asr)
+                    ABsr = np.asarray(ABsr)
+                    ABAsr = np.asarray(ABAsr)
                     
                     psnrA=10*np.log10(2*2/np.mean((A-cycleA)**2))
                     psnrB=10*np.log10(2*2/np.mean((B-cycleB)**2))
@@ -1161,6 +1169,18 @@ with strategy.scope():
                     fakeC_clean_cycle=(fakeC_clean_cycle+1)*127.5
                     tifffile.imsave(image_path, np.array(np.squeeze(fakeC_clean_cycle.astype('uint8')), dtype='uint8'))
                     
+                    image_path = f'./{trainOutputDir}/epoch-{epoch+1}/{numTestBatches}-ASR.tif'
+                    Asr=(Asr+1)*127.5
+                    tifffile.imsave(image_path, np.array(np.squeeze(Asr.astype('uint8')), dtype='uint8'))
+                    
+                    image_path = f'./{trainOutputDir}/epoch-{epoch+1}/{numTestBatches}-ABSR.tif'
+                    ABsr=(ABsr+1)*127.5
+                    tifffile.imsave(image_path, np.array(np.squeeze(ABsr.astype('uint8')), dtype='uint8'))
+                    
+                    image_path = f'./{trainOutputDir}/epoch-{epoch+1}/{numTestBatches}-ABASR.tif'
+                    ABAsr=(ABAsr+1)*127.5
+                    tifffile.imsave(image_path, np.array(np.squeeze(ABAsr.astype('uint8')), dtype='uint8'))
+                    
                     stdout.write(test_template %(numTestBatches, psnrA, psnrB, psnrC, psnrCC, psnrCCC))
                     stdout.flush()
                     if numTestBatches == args.valNum:
@@ -1182,7 +1202,11 @@ with strategy.scope():
                 generatorSR.save(f'{trainingDir}/GSR')
                 if args.ganFlag:
                     discriminatorSR.save(f'{trainingDir}/DSR')
-
+                if args.sigmaType == 'gamma':
+                    generatorSRC.save(f'{trainingDir}/GSRC')
+                    if args.ganFlag:
+                        discriminatorSRC.save(f'{trainingDir}/DSRC')
+    
     elif args.phase == 'test':
 #        # test within scope?
         testFiles = glob(args.test_dir+'/*.mat')

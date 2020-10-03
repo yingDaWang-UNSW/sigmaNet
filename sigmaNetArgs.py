@@ -36,6 +36,7 @@ def args():
     parser.add_argument('--gpuIDs', dest='gpuIDs', type=str, default='0,1,2,3', help='IDs for the GPUs. Empty for CPU. Nospaces')
     parser.add_argument('--nDims', dest='nDims', type=str2int, default=2, help='input dimensions')
     parser.add_argument('--dataset_dir', dest='dataset_dir', default='/media/user/SSD3/datasets/cycleSRANU_2D/', help='dataset path - include last slash')
+    parser.add_argument('--augFlag', dest='augFlag', type=str2bool, default=True, help='aug flag')
     parser.add_argument('--epoch', dest='epoch', type=str2int, default=500, help='# of epoch')
     parser.add_argument('--scale', dest='scale', type=str2int, default=4, help='sr scale factor')
     parser.add_argument('--batch_size', dest='batch_size', type=str2int, default=64, help='# images in batch')
