@@ -135,11 +135,14 @@ with strategy.scope():
       return x
 
     def resizetf2(image, height, width):
-#      k = build_filter(factor=2)
-#      image=tf.expand_dims(image,0)
-#      image = apply_bicubic_downsample(apply_bicubic_downsample(image, filter=k, factor=2), filter=k, factor=2)
-#      image=tf.expand_dims(tf.squeeze(image),2)
-      image = tf.image.resize(image, [height, width],method=tf.image.ResizeMethod.BICUBIC)
+      k = build_filter(factor=2)
+      image=tf.expand_dims(image,0)
+      if args.scale == 4:
+        image = apply_bicubic_downsample(apply_bicubic_downsample(image, filter=k, factor=2), filter=k, factor=2)
+      elif args.scale == 8:
+        image = apply_bicubic_downsample(apply_bicubic_downsample(apply_bicubic_downsample(image, filter=k, factor=2), filter=k, factor=2), filter=k, factor=2)
+      image=tf.expand_dims(tf.squeeze(image),2)
+      #image = tf.image.resize(image, [height, width],method=tf.image.ResizeMethod.BICUBIC)
       return image
       
     def random_croptf2(image, height, width):
@@ -151,8 +154,8 @@ with strategy.scope():
       return image
       
     def saturateAndAdjustBrightness(image):
-      image = tf.image.random_contrast(image, 0, 0.4)
-      image = tf.image.random_brightness(image, 0.4)
+      image = tf.image.random_contrast(image, 0.5, 2)
+      #image = tf.image.random_brightness(image, 0.4)
       image = tf.clip_by_value(image,-1,1)
       return image
       
@@ -505,18 +508,20 @@ with strategy.scope():
     def cyclegan_generator(args):
         x_in = tf.keras.layers.Input(shape=(None, None, 1))
         x = x_in
-        x = tf.keras.layers.Conv2D(args.ngf, 3, padding='same')(x)
-        x1 = x = downsampleEDSR(x, 2, args.ngf*2, norm_type='instancenorm', apply_norm=False,nameIn='cycleganEncode1')
-        x2 = x = downsampleEDSR(x, 2, args.ngf*4, norm_type='instancenorm', apply_norm=False,nameIn='cycleganEncode2')
+        x = xinit = tf.keras.layers.Conv2D(args.ngf, 3, padding='same')(x)
+        x1 = x = downsampleEDSR(x, 2, args.ngf*2, norm_type='instancenorm', apply_norm=True,nameIn='cycleganEncode1')
+        x2 = x = downsampleEDSR(x, 2, args.ngf*4, norm_type='instancenorm', apply_norm=True,nameIn='cycleganEncode2')
         for i in range(8):
-            x = res_block_EDSR(x, args.ngf*4, norm_type='instancenorm', apply_norm=False)
+            x = res_block_EDSR(x, args.ngf*4, norm_type='instancenorm', apply_norm=True)
         x = tf.keras.layers.Conv2D(args.ngf*4, 3, padding='same')(x)
-        x = tf.keras.layers.Concatenate()([x2, x])
-        x = upsampleEDSR(x, 2, args.ngf*2, norm_type='instancenorm', apply_norm=False,nameIn='cycleganDecode1')
-        x = tf.keras.layers.Concatenate()([x1, x])
-        x = upsampleEDSR(x, 2, args.ngf, norm_type='instancenorm', apply_norm=False,nameIn='cycleganDecode2')
+        #x = tf.keras.layers.Concatenate()([x2, x])
+        x=x+x2
+        x = upsampleEDSR(x, 2, args.ngf*2, norm_type='instancenorm', apply_norm=True,nameIn='cycleganDecode1')
+        #x = tf.keras.layers.Concatenate()([x1, x]) # this massively increases stochasticity
+        x=x+x1 # this enforces more well behaved AB mapping
+        x = upsampleEDSR(x, 2, args.ngf, norm_type='instancenorm', apply_norm=True,nameIn='cycleganDecode2')
+        x=x+xinit
         x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
-
         x = tf.keras.layers.Activation('tanh', dtype='float32')(x)
         return tf.keras.models.Model(x_in, x, name="cycleganGenerator")
 
@@ -534,8 +539,8 @@ with strategy.scope():
       x = inp
 
       down1 = downsample(args.ndf, 4, norm_type, False)(x)  # (bs, 128, 128, 64)
-      down2 = downsample(args.ndf*2, 4, norm_type)(down1)  # (bs, 64, 64, 128)
-      down3 = downsample(args.ndf*4, 4, norm_type)(down2)  # (bs, 32, 32, 256)
+      down2 = downsample(args.ndf*2, 4, norm_type, True)(down1)  # (bs, 64, 64, 128)
+      down3 = downsample(args.ndf*4, 4, norm_type, True)(down2)  # (bs, 32, 32, 256)
 
       zero_pad1 = tf.keras.layers.ZeroPadding2D()(down3)  # (bs, 34, 34, 256)
       conv = tf.keras.layers.Conv2D(
