@@ -508,7 +508,7 @@ with strategy.scope():
     def cyclegan_generator(args):
         x_in = tf.keras.layers.Input(shape=(None, None, 1))
         x = x_in
-        x = xinit = tf.keras.layers.Conv2D(args.ngf, 3, padding='same')(x)
+        x = xinit = tf.keras.layers.Conv2D(args.ngf, 7, padding='same')(x)
         x1 = x = downsampleEDSR(x, 2, args.ngf*2, norm_type='instancenorm', apply_norm=True,nameIn='cycleganEncode1')
         x2 = x = downsampleEDSR(x, 2, args.ngf*4, norm_type='instancenorm', apply_norm=True,nameIn='cycleganEncode2')
         for i in range(8):
@@ -521,10 +521,9 @@ with strategy.scope():
         x=x+x1 # this enforces more well behaved AB mapping
         x = upsampleEDSR(x, 2, args.ngf, norm_type='instancenorm', apply_norm=True,nameIn='cycleganDecode2')
         x=x+xinit
-        x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
+        x = tf.keras.layers.Conv2D(1, 7, padding='same')(x)
         x = tf.keras.layers.Activation('tanh', dtype='float32')(x)
         return tf.keras.models.Model(x_in, x, name="cycleganGenerator")
-
 
     def discriminatorCGAN(norm_type='instancenorm'):
       """PatchGan discriminator model (https://arxiv.org/abs/1611.07004).
