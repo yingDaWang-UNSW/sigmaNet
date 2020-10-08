@@ -52,7 +52,8 @@ print('Variable dtype: %s' % policy.variable_dtype)
 if len(args.gpuIDs.split(','))<=1:
     strategy = tf.distribute.OneDeviceStrategy(device="/gpu:0")
 else:
-    strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy()
+    #strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy()
+    strategy = tf.distribute.MirroredStrategy()
     print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
 
@@ -809,18 +810,34 @@ with strategy.scope():
         optimizerDiscriminator = mixed_precision.LossScaleOptimizer(optimizerDiscriminator, loss_scale='dynamic')     
         discriminator.summary(200)
         return discriminator, optimizerDiscriminator
-    
+        
     generatorAB, optimizerGeneratorAB = createGenerator(args)
     generatorBA, optimizerGeneratorBA = createGenerator(args)
     discriminatorA, optimizerDiscriminatorA = createDiscriminator(args)
     discriminatorB, optimizerDiscriminatorB = createDiscriminator(args)
     generatorSR, optimizerGeneratorSR = createSRGenerator(args)
     discriminatorSR, optimizerDiscriminatorSR = createSRDiscriminator(args)
-    
     if args.sigmaType == 'gamma':
         generatorSRC, optimizerGeneratorSRC = createSRGenerator(args)
         discriminatorSRC, optimizerDiscriminatorSRC = createSRDiscriminator(args)
     
+    trainingDir=f"./{args.checkpoint_dir}/{args.modelName}/"
+    if args.continue_train or args.phase == 'test': # restore the weights if requested, or if testing
+        print(f'Loading checkpoints from {trainingDir}')
+        generatorAB.load_weights(f'{trainingDir}/GAB/GAB')
+        generatorBA.load_weights(f'{trainingDir}/GBA/GBA')
+        discriminatorA.load_weights(f'{trainingDir}/DA/DA')
+        discriminatorB.load_weights(f'{trainingDir}/DB/DB')
+        generatorSR.load_weights(f'{trainingDir}/GSR/GSR')
+
+        if args.ganFlag:
+            discriminatorSR.load_weights(f'{trainingDir}/DSR/DSR')
+        if args.sigmaType == 'gamma':
+            generatorSRC = tf.keras.models.load_weights(f'{trainingDir}/GSRC/GSRC')
+            if args.ganFlag:
+                discriminatorSRC.load_weights(f'{trainingDir}/DSRC/DSRC')
+
+
     # define the actions taken per iteration (calc grads and make an optim step)
     def train_step(realLRBatch, HRandBCBatch):
         A = realLRBatch
@@ -1000,21 +1017,6 @@ with strategy.scope():
     def distributed_train_step(realLRBatch, HRandBCBatch):
         PRGABL, PRADVABL, PRGBAL, PRADVBAL, PRDAL, PRDBL, PRGSRL, PRADVSRL, PRDSRL = strategy.run(train_step, args=(realLRBatch, HRandBCBatch,))
         return strategy.reduce(tf.distribute.ReduceOp.SUM, PRGABL, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, PRADVABL, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, PRGBAL, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, PRADVBAL, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, PRDAL, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, PRDBL, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, PRGSRL, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, PRADVSRL, axis=None), strategy.reduce(tf.distribute.ReduceOp.SUM, PRDSRL, axis=None)
-
-    trainingDir=f"./{args.checkpoint_dir}/{args.modelName}/"
-    if args.continue_train or args.phase == 'test': # restore the weights if requested, or if testing
-        print(f'Loading checkpoints from {trainingDir}')
-        generatorAB=tf.keras.models.load_model(f'{trainingDir}/GAB')
-        generatorBA=tf.keras.models.load_model(f'{trainingDir}/GBA')
-        discriminatorA=tf.keras.models.load_model(f'{trainingDir}/DA')
-        discriminatorB=tf.keras.models.load_model(f'{trainingDir}/DB')
-        generatorSR=tf.keras.models.load_model(f'{trainingDir}/GSR')
-        if args.ganFlag:
-            discriminatorSR=tf.keras.models.load_model(f'{trainingDir}/DSR')
-        if args.sigmaType == 'gamma':
-            generatorSRC = tf.keras.models.load_model(f'{trainingDir}/GSRC')
-            if args.ganFlag:
-                discriminatorSRC=tf.keras.models.load_model(f'{trainingDir}/DSRC')
     
     # run
     if args.phase == 'train':
@@ -1209,17 +1211,17 @@ with strategy.scope():
             if (epoch+1) % args.save_freq == 0:
                 #checkpoint.save(checkpoint_prefix)
                 print('Saving network weights')
-                generatorAB.save(f'{trainingDir}/GAB')
-                generatorBA.save(f'{trainingDir}/GBA')
-                discriminatorA.save(f'{trainingDir}/DA')
-                discriminatorB.save(f'{trainingDir}/DB')
-                generatorSR.save(f'{trainingDir}/GSR')
+                generatorAB.save_weights(f'{trainingDir}/GAB/GAB')
+                generatorBA.save_weights(f'{trainingDir}/GBA/GBA')
+                discriminatorA.save_weights(f'{trainingDir}/DA/DA')
+                discriminatorB.save_weights(f'{trainingDir}/DB/DB')
+                generatorSR.save_weights(f'{trainingDir}/GSR/GSR')
                 if args.ganFlag:
-                    discriminatorSR.save(f'{trainingDir}/DSR')
+                    discriminatorSR.save_weights(f'{trainingDir}/DSR/DSR')
                 if args.sigmaType == 'gamma':
-                    generatorSRC.save(f'{trainingDir}/GSRC')
+                    generatorSRC.save_weights(f'{trainingDir}/GSRC/GSRC')
                     if args.ganFlag:
-                        discriminatorSRC.save(f'{trainingDir}/DSRC')
+                        discriminatorSRC.save_weights(f'{trainingDir}/DSRC/DSRC')
     
     elif args.phase == 'test':
 #        # test within scope?
