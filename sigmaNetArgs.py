@@ -60,7 +60,7 @@ def args():
     
     # Model IO
     parser.add_argument('--save_freq', dest='save_freq', type=str2int, default=10, help='save a model every save_freq epochs')
-    parser.add_argument('--print_freq', dest='print_freq', type=str2int, default=25, help='print the validation images every X epochs')
+    parser.add_argument('--print_freq', dest='print_freq', type=str2int, default=10, help='print the validation images every X epochs')
     parser.add_argument('--continue_train', dest='continue_train', type=str2bool, default=False, help='if continue training, load the latest model: 1: true, 0: false')
     parser.add_argument('--checkpoint_dir', dest='checkpoint_dir', default='./checkpoints', help='models are saved here')
     parser.add_argument('--modelName', dest='modelName', default='sigmaNetTest', help='models are loaded here')
@@ -101,6 +101,7 @@ def args():
 
     gpuList=args.gpuIDs
     args.numGPUs = len(gpuList.split(','))
-    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
-    os.environ["CUDA_VISIBLE_DEVICES"]=gpuList
+    if args.numGPUs<=4:
+        os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
+        os.environ["CUDA_VISIBLE_DEVICES"]=gpuList
     return args

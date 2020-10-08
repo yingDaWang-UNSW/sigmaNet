@@ -1,0 +1,20 @@
+#!/bin/bash
+#PBS -P zt36
+#PBS -q gpuvolta
+#PBS -l walltime=48:00:00
+#PBS -l mem=128GB
+#PBS -l jobfs=1GB
+#PBS -l ncpus=48
+#PBS -l ngpus=4
+#PBS -l storage=scratch/m65
+#PBS -l storage=/home/561/yw5484
+#PBS -l software=my_program
+#PBS -l wd
+cd $PBS_O_WORKDIR
+~/anaconda3/bin/conda init bash
+source ~/.bashrc
+source ~/anaconda3/etc/profile.d/conda.sh
+conda activate cleanTF2
+conda info --envs
+python /scratch/m65/yw5484/omegaNet/sigmaNet/runSigmaNet.py --batch_size 16 --generatorType 'rrdb' --fine_size 64 --val_size 128 --disc_size 128 --continue_train 0 --augFlag 0 --mixedPrecision 0 --ganFlag 1 --srDiscLoss 'RelSC' --cycleDiscLoss 'RelLS' --modelName 'cyclegan-rellsgan-resnetstyle-subpix-rrdb-relscgan-coupled-128-simon8x' --dataset_dir '/scratch/m65/yw5484/cycleSRSimonx8_2D/' --sigmaCouplingFlag 1 --scale 8 | tee gadiOmegaNetLog_simon8x.txt
+

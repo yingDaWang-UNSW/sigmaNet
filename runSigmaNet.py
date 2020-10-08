@@ -14,6 +14,7 @@ variational isnt needed because we can just synthesise weights/images between PS
 
 #TODO: write up testing section if train if test.
 #from __future__ import absolute_import, division, print_function, unicode_literals
+import functools
 import tensorflow as tf
 import tensorflow.keras.backend as K
 from tensorflow.keras.mixed_precision import experimental as mixed_precision
@@ -51,7 +52,8 @@ print('Variable dtype: %s' % policy.variable_dtype)
 if len(args.gpuIDs.split(','))<=1:
     strategy = tf.distribute.OneDeviceStrategy(device="/gpu:0")
 else:
-    strategy = tf.distribute.MirroredStrategy()
+    strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy()
+    print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
 
 # define the network
@@ -149,6 +151,10 @@ with strategy.scope():
       cropped_image = tf.image.random_crop(image, size=[height, width,1])
       return cropped_image
       
+    def random_croptf2_batch(image, height, width):
+      cropped_image = tf.image.random_crop(image, size=[image.shape[0], height, width, image.shape[3]])
+      return cropped_image
+      
     def normalize(image):
       image = (image / 127.5) - 1
       return image
@@ -238,7 +244,6 @@ with strategy.scope():
     #sampleRealHRBCTrain=next(iter(realHR_and_synLR_dataset))
     #sampleRealLRTest=next(iter(realLR_dataset_test))
     #sampleRealHRBCTest=next(iter(realHR_and_synLR_dataset_test))
-
 
     # define architecture
     class InstanceNormalization(tf.keras.layers.Layer):
@@ -641,7 +646,7 @@ with strategy.scope():
         x = tf.keras.layers.Conv2D(1, 3, padding='same')(x)
         x = tf.keras.layers.Activation('tanh', dtype='float32')(x)
         return tf.keras.models.Model(x_in, x, name="RRFDB-RRDB")
-        
+
     def RRDB_SRGAN(scale, num_filters=64, num_res_blocks=8):
         x_in = tf.keras.layers.Input(shape=(None, None, 1))
         x = x_in
@@ -786,7 +791,7 @@ with strategy.scope():
         elif args.generatorType == 'rrfdb-rrdb':
             generator = RRFDB_RRDB_SRGAN(scale=args.scale, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks, num_res_rfb_blocks=args.numResRFBBlocks)
         elif args.generatorType == 'rrdb':
-            generator = RRDB_SRGAN(scale=args.scale, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks)
+            generator = RRDB_SRGAN(scale=args.scale, num_filters=args.ngsrf, num_res_blocks=args.numResBlocks)#RRDB_Model(nf=64, nb = 16, gc=32, wd=0., name='RRDB_model')#
         generator.summary(200)
         optimizerGenerator = tf.keras.optimizers.Adam(lr=args.lr)
         optimizerGenerator = mixed_precision.LossScaleOptimizer(optimizerGenerator, loss_scale='dynamic')
@@ -889,8 +894,8 @@ with strategy.scope():
                 gsrLoss = meanSquaredError(C, C_sr)
                 
             if args.ganFlag:
-                disc_real_C = discriminatorSR(C[:,0:args.disc_size,0:args.disc_size,:], training=True)
-                disc_fake_C = discriminatorSR(C_sr[:,0:args.disc_size,0:args.disc_size,:], training=True)
+                disc_real_C = discriminatorSR(random_croptf2_batch(C, args.disc_size, args.disc_size), training=True)
+                disc_fake_C = discriminatorSR(random_croptf2_batch(C_sr, args.disc_size, args.disc_size), training=True)
 
                 if args.srDiscLoss == 'LS':
                     advsrLoss = advLsganLoss(disc_fake_C)
@@ -913,7 +918,7 @@ with strategy.scope():
                 elif args.srPixelwiseLoss == 'L2':
                     gsrLoss = gsrLoss + meanSquaredError(C, C_clean)                
                 if args.ganFlag:
-                    disc_fake_CC = discriminatorSR(C_clean[:,0:args.disc_size,0:args.disc_size,:], training=True)
+                    disc_fake_CC = discriminatorSR(random_croptf2_batch(C_clean, args.disc_size, args.disc_size), training=True)
 
                     if args.srDiscLoss == 'LS':
                         advsrLoss = advsrLoss + advLsganLoss(disc_fake_CC)
@@ -934,7 +939,7 @@ with strategy.scope():
                 elif args.srPixelwiseLoss == 'L2':
                     gsrLoss = gsrLoss + meanSquaredError(C, C_clean_cycle)                
                 if args.ganFlag:
-                    disc_fake_CCC = discriminatorSR(C_clean_cycle[:,0:args.disc_size,0:args.disc_size,:], training=True)
+                    disc_fake_CCC = discriminatorSR(random_croptf2_batch(C_clean_cycle, args.disc_size, args.disc_size), training=True)
 
                     if args.srDiscLoss == 'LS':
                         advsrLoss = advsrLoss + advLsganLoss(disc_fake_CCC)
