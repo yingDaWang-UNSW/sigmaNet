@@ -84,7 +84,7 @@ def args():
     # loss coefficients 
     parser.add_argument('--cycleAdv_lambda', dest='cycleAdv_lambda', type=str2float, default=0.1, help='weight on Adv term for normal cycle')
     parser.add_argument('--srAdv_lambda', dest='srAdv_lambda', type=str2float, default=1e-3, help='weight on Adv term for normal sr')
-    parser.add_argument('--sigmaCoupling_lambda', dest='sigmaCoupling_lambda', type=str2float, default=0.1, help='sigmaCouplingFlag')
+    parser.add_argument('--sigmaCoupling_lambda', dest='sigmaCoupling_lambda', type=str2float, default=1e-2, help='sigmaCouplingFlag')
 #    parser.add_argument('--idt_lambda', dest='idt_lambda', type=str2float, default=0.0, help='weight assigned to the a2b identity loss function') # b2b should give b
 #    parser.add_argument('--tv_lambda', dest='tv_lambda', type=str2float, default=0.0, help='weight assigned to the a2b total variation loss function')
 #    parser.add_argument('--L1_sr_lambda', dest='L1_sr_lambda', type=str2float, default=10.0, help='weight on L1 term in the SR cycle') # low since patchGAN doesnt have dense summation?

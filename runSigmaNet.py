@@ -845,131 +845,126 @@ with strategy.scope():
         # train
         with tf.GradientTape(persistent=True) as tape:
             # run a cycle on the cycleGAN
-            B_fake = generatorAB(A, training = True)
-            A_cycle = generatorBA(B_fake, training = True)
+            AB = generatorAB(A, training = True)
+            ABA = generatorBA(AB, training = True)
             
-            A_fake = generatorBA(B, training = True)
-            B_cycle = generatorAB(A_fake, training = True)
+            BA = generatorBA(B, training = True)
+            BAB = generatorAB(BA, training = True)
             
             # run the identity through the generators
             A_same = generatorBA(A, training = True)
             B_same = generatorAB(B, training = True)
             
             # get the discriminator logits
-            disc_real_A = discriminatorA(A, training=True)
-            disc_fake_A = discriminatorA(A_fake, training=True)
-            disc_real_B = discriminatorB(B, training=True)
-            disc_fake_B = discriminatorB(B_fake, training=True)
-                       
+            disc_A = discriminatorA(A, training=True)
+            disc_BA = discriminatorA(BA, training=True)
+            disc_B = discriminatorB(B, training=True)
+            disc_AB = discriminatorB(AB, training=True)
+
+#            disc_ABA = discriminatorA(ABA, training=True)
+#            disc_BAB = discriminatorB(BAB, training=True)
+            
             ## calculate the cycle and idt loss (pixelwise)
             if args.cyclePixelwiseLoss == 'L1':
-                cycleLoss = meanAbsoluteError(A, A_cycle) + meanAbsoluteError(B, B_cycle) #mse would also work here
+                cycleLoss = meanAbsoluteError(A, ABA) + meanAbsoluteError(B, BAB) #mse would also work here
                 idtABLoss = meanAbsoluteError(A, A_same)
                 idtBALoss = meanAbsoluteError(B, B_same)
             elif args.cyclePixelwiseLoss == 'L2':
-                cycleLoss = meanSquaredError(A, A_cycle) + meanSquaredError(B, B_cycle) #mae would also work here
+                cycleLoss = meanSquaredError(A, ABA) + meanSquaredError(B, BAB) #mae would also work here
                 idtABLoss = meanSquaredError(A, A_same)
                 idtBALoss = meanSquaredError(B, B_same)
                 
             ## calculate the adversarial/discriminator losses (cross entropy)
             if args.cycleDiscLoss == 'LS':
-                advABLoss = advLsganLoss(disc_fake_B)
-                advBALoss = advLsganLoss(disc_fake_A)
-                discALoss = lsganLoss(disc_real_A, disc_fake_A)
-                discBLoss = lsganLoss(disc_real_B, disc_fake_B)
+                advBLoss = advLsganLoss(disc_AB)# + advLsganLoss(disc_BAB)
+                advALoss = advLsganLoss(disc_BA)# + advLsganLoss(disc_ABA)
+                discALoss = lsganLoss(disc_A, disc_BA)# + lsganLoss(disc_A, disc_ABA)
+                discBLoss = lsganLoss(disc_B, disc_AB)# + lsganLoss(disc_B, disc_BAB)
+                
             elif args.cycleDiscLoss == 'SC':
-                advABLoss = advScganLoss(disc_fake_B)
-                advBALoss = advScganLoss(disc_fake_A)
-                discALoss = scganLoss(disc_real_A, disc_fake_A)
-                discBLoss = scganLoss(disc_real_B, disc_fake_B)
+                advBLoss = advScganLoss(disc_AB)# + advScganLoss(disc_BAB)
+                advALoss = advScganLoss(disc_BA)# + advScganLoss(disc_ABA)
+                discALoss = scganLoss(disc_A, disc_BA)# + scganLoss(disc_A, disc_ABA)
+                discBLoss = scganLoss(disc_B, disc_AB)# + scganLoss(disc_B, disc_BAB)
+
             elif args.cycleDiscLoss == 'RelSC':
-                advABLoss = rel_advScganLoss(disc_real_B, disc_fake_B)
-                advBALoss = rel_advScganLoss(disc_real_A, disc_fake_A)
-                discALoss = rel_scganLoss(disc_real_A, disc_fake_A)
-                discBLoss = rel_scganLoss(disc_real_B, disc_fake_B)
+                advBLoss = rel_advScganLoss(disc_B, disc_AB)# + rel_advScganLoss(disc_B, disc_BAB)
+                advALoss = rel_advScganLoss(disc_A, disc_BA)# + rel_advScganLoss(disc_A, disc_ABA)
+                discALoss = rel_scganLoss(disc_A, disc_BA)# + rel_scganLoss(disc_A, disc_ABA)
+                discBLoss = rel_scganLoss(disc_B, disc_AB)# + rel_scganLoss(disc_B, disc_BAB)
+
             elif args.cycleDiscLoss == 'RelLS':
-                advABLoss = reladvLsganLoss(disc_real_B, disc_fake_B)
-                advBALoss = reladvLsganLoss(disc_real_A, disc_fake_A)
-                discALoss = rellsganLoss(disc_real_A, disc_fake_A)
-                discBLoss = rellsganLoss(disc_real_B, disc_fake_B)
-            totalGABLoss = cycleLoss + 0.5*idtABLoss + args.cycleAdv_lambda*advABLoss
-            totalGBALoss = cycleLoss + 0.5*idtBALoss + args.cycleAdv_lambda*advBALoss
+                advBLoss = reladvLsganLoss(disc_B, disc_AB)# + reladvLsganLoss(disc_B, disc_BAB) 
+                advALoss = reladvLsganLoss(disc_A, disc_BA)# + reladvLsganLoss(disc_A, disc_ABA) 
+                discALoss = rellsganLoss(disc_A, disc_BA)# + rellsganLoss(disc_A, disc_ABA)
+                discBLoss = rellsganLoss(disc_B, disc_AB)# + rellsganLoss(disc_B, disc_BAB)
+                
+            totalGABLoss = cycleLoss + 0.5*idtABLoss + args.cycleAdv_lambda*advBLoss
+            totalGBALoss = cycleLoss + 0.5*idtBALoss + args.cycleAdv_lambda*advALoss
             
             totalDALoss = discALoss
             totalDBLoss = discBLoss
             
             ## run and calculate sr losses
             # run the SRGAN in sigma mode
-            if args.sigmaType == 'sigma' or args.sigmaType == 'omega' or args.sigmaType == 'gamma':
-                C_sr = generatorSR(A_fake, training=True)
-            elif args.sigmaType == 'delta':
-                C_sr = generatorSR(B, training=True)
-            
+#            if args.sigmaType == 'sigma' or args.sigmaType == 'omega' or args.sigmaType == 'gamma':
+            BASR = generatorSR(BA, training=True)
             if args.srPixelwiseLoss == 'L1':
-                gsrLoss = meanAbsoluteError(C, C_sr)
+                gsrLoss = meanAbsoluteError(C, BASR)
             elif args.srPixelwiseLoss == 'L2':
-                gsrLoss = meanSquaredError(C, C_sr)
-                
+                gsrLoss = meanSquaredError(C, BASR)
+#            elif args.sigmaType == 'delta':
+#                BSR = generatorSR(B, training=True)
+#                if args.srPixelwiseLoss == 'L1':
+#                    gsrLoss = meanAbsoluteError(C, BSR)
+#                elif args.srPixelwiseLoss == 'L2':
+#                    gsrLoss = meanSquaredError(C, BSR)
+
+            advsrLoss = 0
+            dsrLoss = 0
             if args.ganFlag:
-                disc_real_C = discriminatorSR(random_croptf2_batch(C, args.disc_size, args.disc_size), training=True)
-                disc_fake_C = discriminatorSR(random_croptf2_batch(C_sr, args.disc_size, args.disc_size), training=True)
+                disc_C = discriminatorSR(random_croptf2_batch(C, args.disc_size, args.disc_size), training=True)
+                disc_BASR = discriminatorSR(random_croptf2_batch(BASR, args.disc_size, args.disc_size), training=True)
 
                 if args.srDiscLoss == 'LS':
-                    advsrLoss = advLsganLoss(disc_fake_C)
-                    dsrLoss = lsganLoss(disc_real_C, disc_fake_C)
+                    advsrLoss = advsrLoss + advLsganLoss(disc_BASR)
+                    dsrLoss = dsrLoss + lsganLoss(disc_C, disc_BASR)
                 elif args.srDiscLoss == 'SC':
-                    advsrLoss = advScganLoss(disc_fake_C)
-                    dsrLoss = scganLoss(disc_real_C, disc_fake_C)
+                    advsrLoss = advsrLoss + advScganLoss(disc_BASR)
+                    dsrLoss = dsrLoss + scganLoss(disc_C, disc_BASR)
                 elif args.srDiscLoss == 'RelSC':
-                    advsrLoss = rel_advScganLoss(disc_real_C, disc_fake_C)
-                    dsrLoss = rel_scganLoss(disc_real_C, disc_fake_C)
-            else:
-                advsrLoss = 0
-                dsrLoss = 0
+                    advsrLoss = advsrLoss + rel_advScganLoss(disc_C, disc_BASR)
+                    dsrLoss = dsrLoss + rel_scganLoss(disc_C, disc_BASR)
            
            ## if omega, also pass the clean image through SR and the cycle clean image and calculate extra losses
             if args.sigmaType == 'omega':
-                C_clean = generatorSR(B, training=True)
+                BSR = generatorSR(B, training=True)
+                BABSR = generatorSR(BAB, training=True)
+                ASR = generatorSR(A, training=True)
+                ABSR = generatorSR(AB, training=True)
+                ABASR = generatorSR(ABA, training=True)
                 if args.srPixelwiseLoss == 'L1':
-                    gsrLoss = gsrLoss + meanAbsoluteError(C, C_clean)
+                    gsrLoss = gsrLoss + meanAbsoluteError(C, BSR) + meanAbsoluteError(C, BABSR) + 1*(meanAbsoluteError(A, AB) + meanAbsoluteError(ABA, AB) + meanAbsoluteError(A, ABA))
                 elif args.srPixelwiseLoss == 'L2':
-                    gsrLoss = gsrLoss + meanSquaredError(C, C_clean)                
-                if args.ganFlag:
-                    disc_fake_CC = discriminatorSR(random_croptf2_batch(C_clean, args.disc_size, args.disc_size), training=True)
-
-                    if args.srDiscLoss == 'LS':
-                        advsrLoss = advsrLoss + advLsganLoss(disc_fake_CC)
-                        dsrLoss = dsrLoss + lsganLoss(disc_real_C, disc_fake_CC)
-                    elif args.srDiscLoss == 'SC':
-                        advsrLoss = advsrLoss + advScganLoss(disc_fake_CC)
-                        dsrLoss = dsrLoss + scganLoss(disc_real_C, disc_fake_CC)
-                    elif args.srDiscLoss == 'RelSC':
-                        advsrLoss = advsrLoss + rel_advScganLoss(disc_real_C, disc_fake_CC)
-                        dsrLoss = dsrLoss + rel_scganLoss(disc_real_C, disc_fake_CC)
-                else:
-                    advsrLoss = 0
-                    dsrLoss = 0
+                    gsrLoss = gsrLoss + meanSquaredError(C, BSR) + meanSquaredError(C, BABSR) + 1*(meanSquaredError(A, AB) + meanSquaredError(ABA, AB) + meanSquaredError(A, ABA))     
                     
-                C_clean_cycle = generatorSR(B_cycle, training=True)
-                if args.srPixelwiseLoss == 'L1':
-                    gsrLoss = gsrLoss + meanAbsoluteError(C, C_clean_cycle)
-                elif args.srPixelwiseLoss == 'L2':
-                    gsrLoss = gsrLoss + meanSquaredError(C, C_clean_cycle)                
                 if args.ganFlag:
-                    disc_fake_CCC = discriminatorSR(random_croptf2_batch(C_clean_cycle, args.disc_size, args.disc_size), training=True)
-
+                    disc_BSR = discriminatorSR(random_croptf2_batch(BSR, args.disc_size, args.disc_size), training=True)
+                    disc_BABSR = discriminatorSR(random_croptf2_batch(BABSR, args.disc_size, args.disc_size), training=True)
+                    disc_ASR = discriminatorSR(random_croptf2_batch(ASR, args.disc_size, args.disc_size), training=True)
+                    disc_ABSR = discriminatorSR(random_croptf2_batch(ABSR, args.disc_size, args.disc_size), training=True)
+                    disc_ABASR = discriminatorSR(random_croptf2_batch(ABASR, args.disc_size, args.disc_size), training=True)
+                    
                     if args.srDiscLoss == 'LS':
-                        advsrLoss = advsrLoss + advLsganLoss(disc_fake_CCC)
-                        dsrLoss = dsrLoss + lsganLoss(disc_real_C, disc_fake_CCC)
+                        advsrLoss = advsrLoss + advLsganLoss(disc_BSR) + advLsganLoss(disc_BABSR) + advLsganLoss(disc_ASR) + advLsganLoss(disc_ABSR) + advLsganLoss(disc_ABASR)
+                        dsrLoss = dsrLoss + lsganLoss(disc_C, disc_BSR) + lsganLoss(disc_C, disc_BABSR) + lsganLoss(disc_C, disc_ASR) + lsganLoss(disc_C, disc_ABSR) + lsganLoss(disc_C, disc_ABASR)
                     elif args.srDiscLoss == 'SC':
-                        advsrLoss = advsrLoss + advScganLoss(disc_fake_CCC)
-                        dsrLoss = dsrLoss + scganLoss(disc_real_C, disc_fake_CCC)
+                        advsrLoss = advsrLoss + advScganLoss(disc_BSR) + advScganLoss(disc_BABSR) + advScganLoss(disc_ASR) + advScganLoss(disc_ABSR) + advScganLoss(disc_ABASR)
+                        dsrLoss = dsrLoss + scganLoss(disc_C, disc_BSR) + scganLoss(disc_C, disc_BABSR) + scganLoss(disc_C, disc_ASR) + scganLoss(disc_C, disc_ABSR) + scganLoss(disc_C, disc_ABASR)
                     elif args.srDiscLoss == 'RelSC':
-                        advsrLoss = advsrLoss + rel_advScganLoss(disc_real_C, disc_fake_CCC)
-                        dsrLoss = dsrLoss + rel_scganLoss(disc_real_C, disc_fake_CCC)
-                else:
-                    advsrLoss = 0
-                    dsrLoss = 0
+                        advsrLoss = advsrLoss + rel_advScganLoss(disc_C, disc_BSR) + rel_advScganLoss(disc_C, disc_BABSR) + rel_advScganLoss(disc_C, disc_ASR) + rel_advScganLoss(disc_C, disc_ABSR) + rel_advScganLoss(disc_C, disc_ABASR)
+                        dsrLoss = dsrLoss + rel_scganLoss(disc_C, disc_BSR) + rel_scganLoss(disc_C, disc_BABSR) + rel_scganLoss(disc_C, disc_ASR) + rel_scganLoss(disc_C, disc_ABSR) + rel_scganLoss(disc_C, disc_ABASR)
+                    
            
             totalGsrLoss = gsrLoss + args.srAdv_lambda*advsrLoss
             totalDsrLoss = dsrLoss
@@ -1011,7 +1006,7 @@ with strategy.scope():
         if args.ganFlag:
             optimizerDiscriminatorSR.apply_gradients(zip(gradDsr,discriminatorSR.trainable_variables))
 
-        return totalGABLoss, advABLoss, totalGBALoss, advBALoss, totalDALoss, totalDBLoss, totalGsrLoss, advsrLoss, totalDsrLoss
+        return totalGABLoss, advBLoss, totalGBALoss, advALoss, totalDALoss, totalDBLoss, totalGsrLoss, advsrLoss, totalDsrLoss
 
     @tf.function
     def distributed_train_step(realLRBatch, HRandBCBatch):
@@ -1173,15 +1168,15 @@ with strategy.scope():
                     cycleB=(cycleB+1)*127.5
                     tifffile.imsave(image_path, np.array(np.squeeze(cycleB.astype('uint8')), dtype='uint8'))
 
-                    image_path = f'./{trainOutputDir}/epoch-{epoch+1}/{numTestBatches}-CSR.tif'
+                    image_path = f'./{trainOutputDir}/epoch-{epoch+1}/{numTestBatches}-BASR.tif'
                     fakeC=(fakeC+1)*127.5
                     tifffile.imsave(image_path, np.array(np.squeeze(fakeC.astype('uint8')), dtype='uint8'))
                     
-                    image_path = f'./{trainOutputDir}/epoch-{epoch+1}/{numTestBatches}-CSRC.tif'
+                    image_path = f'./{trainOutputDir}/epoch-{epoch+1}/{numTestBatches}-BSR.tif'
                     fakeC_clean=(fakeC_clean+1)*127.5
                     tifffile.imsave(image_path, np.array(np.squeeze(fakeC_clean.astype('uint8')), dtype='uint8'))
                     
-                    image_path = f'./{trainOutputDir}/epoch-{epoch+1}/{numTestBatches}-CSRCC.tif'
+                    image_path = f'./{trainOutputDir}/epoch-{epoch+1}/{numTestBatches}-BABSR.tif'
                     fakeC_clean_cycle=(fakeC_clean_cycle+1)*127.5
                     tifffile.imsave(image_path, np.array(np.squeeze(fakeC_clean_cycle.astype('uint8')), dtype='uint8'))
                     
